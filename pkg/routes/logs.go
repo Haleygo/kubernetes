@@ -18,7 +18,9 @@ package routes
 
 import (
 	"net/http"
+	"os"
 	"path"
+	"syscall"
 
 	"github.com/emicklei/go-restful"
 )
@@ -42,10 +44,27 @@ func (l Logs) Install(c *restful.Container) {
 func logFileHandler(req *restful.Request, resp *restful.Response) {
 	logdir := "/var/log"
 	actual := path.Join(logdir, req.PathParameter("logpath"))
+
+	// pre check file, if file name is too long, return 404
+	isNameOversize := preCheckLogFileNameLength(actual)
+	if isNameOversize {
+		http.NotFound(resp, req.Request)
+		return
+	}
 	http.ServeFile(resp.ResponseWriter, req.Request, actual)
 }
 
 func logFileListHandler(req *restful.Request, resp *restful.Response) {
 	logdir := "/var/log"
 	http.ServeFile(resp.ResponseWriter, req.Request, logdir)
+}
+
+func preCheckLogFileNameLength(filePath string) bool {
+	_, err := os.Stat(filePath)
+	if err != nil {
+		if e, ok := err.(*os.PathError); ok && e.Err == syscall.ENAMETOOLONG {
+			return true
+		}
+	}
+	return false
 }
